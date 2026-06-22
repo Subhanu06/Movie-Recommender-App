@@ -1,5 +1,6 @@
 import streamlit as st
 import pickle
+import numpy as np
 import requests
 from dotenv import load_dotenv
 import os
@@ -12,7 +13,7 @@ load_dotenv()
 @st.cache_resource
 def load_data():
     movies = pickle.load(open("movies.pkl", "rb"))
-    similarity = pickle.load(open("similarity.pkl", "rb"))
+    similarity = np.load("similarity.npz")["similarity"]
     return movies, similarity
 
 movies, similarity = load_data()
