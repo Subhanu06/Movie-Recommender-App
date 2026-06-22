@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 load_dotenv()
 
-# -------------------- LOAD DATA --------------------
+
 
 @st.cache_resource
 def load_data():
@@ -17,11 +17,11 @@ def load_data():
 
 movies, similarity = load_data()
 
-# -------------------- TMDB SESSION --------------------
+
 
 session = requests.Session()
 
-# -------------------- FETCH POSTER --------------------
+
 
 @st.cache_data
 def fetch_poster(movie_id):
@@ -54,7 +54,7 @@ def fetch_poster(movie_id):
     except Exception:
         return None
 
-# -------------------- RECOMMEND --------------------
+
 
 def recommend(movie_name):
 
@@ -88,7 +88,7 @@ def recommend(movie_name):
 
     return recommended_movies, recommended_movies_posters
 
-# -------------------- UI --------------------
+
 
 st.title("Movie Recommendation System")
 
