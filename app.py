@@ -3,37 +3,58 @@ import pickle
 import requests
 from dotenv import load_dotenv
 import os
+from concurrent.futures import ThreadPoolExecutor
 
 load_dotenv()
 
-movies = pickle.load(open('movies.pkl','rb'))
-similarity = pickle.load(open('similarity.pkl','rb'))
+# -------------------- LOAD DATA --------------------
 
-print(f"movies.pkl size: {os.path.getsize('movies.pkl')/(1024*1024):.2f} MB")
-print(f"similarity.pkl size: {os.path.getsize('similarity.pkl')/(1024*1024):.2f} MB")
+@st.cache_resource
+def load_data():
+    movies = pickle.load(open("movies.pkl", "rb"))
+    similarity = pickle.load(open("similarity.pkl", "rb"))
+    return movies, similarity
 
-st.title('Movie Recommendation System')
+movies, similarity = load_data()
 
-selected_movie = st.selectbox(
-    'Select a movie:',
-    movies['title'].values
-)
+# -------------------- TMDB SESSION --------------------
+
+session = requests.Session()
+
+# -------------------- FETCH POSTER --------------------
+
+@st.cache_data
 def fetch_poster(movie_id):
+
     url = f"https://api.themoviedb.org/3/movie/{movie_id}?language=en-US"
 
     headers = {
-    "accept": "application/json",
-    "Authorization": f"Bearer {os.getenv('TMDB_API_KEY')}"
+        "accept": "application/json",
+        "Authorization": f"Bearer {os.getenv('TMDB_API_KEY')}"
     }
-    
 
-    response = requests.get(url, headers=headers)
-    data = response.json()
-    
+    try:
+        response = session.get(
+            url,
+            headers=headers,
+            timeout=5
+        )
 
-    return "https://image.tmdb.org/t/p/w500"+data['poster_path']
+        response.raise_for_status()
 
+        data = response.json()
 
+        poster_path = data.get("poster_path")
+
+        if poster_path:
+            return f"https://image.tmdb.org/t/p/w500{poster_path}"
+
+        return None
+
+    except Exception:
+        return None
+
+# -------------------- RECOMMEND --------------------
 
 def recommend(movie_name):
 
@@ -43,33 +64,52 @@ def recommend(movie_name):
 
     movie_list = sorted(
         list(enumerate(distances)),
-        reverse=True,
-        key=lambda x: x[1]
+        key=lambda x: x[1],
+        reverse=True
     )[1:6]
 
     recommended_movies = []
-    recommended_movies_posters = []
-    for i in movie_list:
-        movie_id=movies.iloc[i[0]].movie_id
+    movie_ids = []
 
+    for i in movie_list:
         recommended_movies.append(
             movies.iloc[i[0]].title
         )
-        recommended_movies_posters.append(
-            fetch_poster(movie_id)
+
+        movie_ids.append(
+            movies.iloc[i[0]].movie_id
+        )
+
+    # Fetch all posters in parallel
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        recommended_movies_posters = list(
+            executor.map(fetch_poster, movie_ids)
         )
 
     return recommended_movies, recommended_movies_posters
 
+# -------------------- UI --------------------
 
+st.title("Movie Recommendation System")
 
+selected_movie = st.selectbox(
+    "Select a movie:",
+    movies["title"].values
+)
 
-if st.button('Get Recommendations'):
-    names, posters = recommend(selected_movie)
+if st.button("Get Recommendations"):
+
+    with st.spinner("Finding recommendations..."):
+        names, posters = recommend(selected_movie)
 
     cols = st.columns(5)
 
     for i, col in enumerate(cols):
         with col:
-            st.image(posters[i], width='stretch')
+
+            if posters[i]:
+                st.image(posters[i], width="stretch")
+            else:
+                st.write("No Poster")
+
             st.caption(names[i])
